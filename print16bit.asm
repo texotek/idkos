@@ -31,27 +31,5 @@ print:
     int 0x10
     ret
 
-;     push 0
-; readString:
-;     mov ah, 0x0
-;     int 0x16
-;
-;     cmp al, 0xd
-;     je printString
-;
-;     mov ah, 0xe
-;     int 0x10
-;
-;     push ax
-;     jmp readString
-;
-; printString:
-;     pop ax
-;     cmp ax, 0
-;     je end
-;     mov ah, 0xe
-;     int 0x10
-;     jmp printString
-
 times 510-($-$$) db 0
 db 0x55, 0xaa
