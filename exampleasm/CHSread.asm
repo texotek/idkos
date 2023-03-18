@@ -6,7 +6,7 @@
 
 ; C=0, H=0, S=2
 mov ah, 2 ; function 2
-mov al, 1 ; number of sectors to be read
+mov al, 2 ; number of sectors to be read
 mov bx, 0x7e00 ; Where we load the sector
 mov ch, 0 ; Cylinder 0
 mov cl, 2 ; Sector number 2

@@ -3,6 +3,8 @@
 ; In this program we enter 32bit protected mode
 ; For that we have to first define a global descriptor table
 
+CODE_SEG equ code_descriptor - GDT_Start
+DATA_SEG equ data_descriptor - GDT_Start
 
 cli ; DISABLE interupts
 lgdt [GDT_Descriptor]
@@ -47,16 +49,9 @@ GDT_Descriptor:
 
 [bits 32]
 start_protected:
-    ; videaMemory = 0xb8000
-    ; al = character
-    ; ah = color
 
-    mov al, 'A'
-    mov ah, 0x0f
-
-    mov [0xb8000], ax
-
-    jmp $
+end:
+jmp $
 
 times 510-($-$$) db 0
 db 0x55, 0xaa
