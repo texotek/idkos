@@ -1,3 +1,4 @@
+.vscode
 build
-*.bin
-*.o
+
+bx_enh_dbg.ini

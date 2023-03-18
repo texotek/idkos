@@ -1,22 +1,21 @@
 ; Bootloader for IDKOS
 ; Author Felix Dahmen (texotek)
-;
 
-org 0x7C00
-bits 16
+org 0x7c00  ; BIOS loads first sector at 0x7c00
+bits 16     ; Set execution mode to 16 bit
 
-%define ENDL 0x0D, 0x0A
+%define endl 0x0d, 0x0a
 
 ; FAT12 headers
-jmp short start
+jmp short main
 nop
 
 dfh_oem_name:             db "IDKOS0.1"     ; 8 bytes
-dfh_bytes:                dw 512
+dfh_bytes:                dw 512            ; Bytes per sector
 dfh_sectors_per_cluster:  db 1
 dfh_reserverd_sectors:    dw 1
-dfh_fat_count:            db 2
-dfh_dir_entry_count:      dw 0xe0
+dfh_fat_count:            db 2              ; File allocation table redundency count
+dfh_dir_entry_count:      dw 0xe0           ; 244
 dfh_total_sectors:        dw 2880
 dfh_media_descriptor:     db 0xf0
 dfh_sectors_per_fat:      dw 9
@@ -28,22 +27,36 @@ dfh_large_sector_count:   dd 0
 ; extended boot record
 ebr_drive_number:           db 0                    ; 0x00 floppy, 0x80 hdd, useless
                             db 0                    ; reserved
-ebr_signature:              db 29h
+ebr_signature:              db 0x29
 ebr_volume_id:              db 12h, 34h, 56h, 78h   ; serial number
 ebr_volume_label:           db 'IDKOS      '        ; 11 bytes, padded with spaces
 ebr_system_id:              db 'FAT12   '           ; 8 bytes
 
 ; Code goes here
-start:
-    jmp main
+main:
+    ; setup data segments
+    mov ax, 0                   ; can't set ds/es directly
+    mov ds, ax
+    mov es, ax
+    
+    ; setup stack
+    mov ss, ax
+    mov sp, 0x7c00              ; stack grows downwards from where we are loaded in memory
 
+    mov [ebr_drive_number], dl
+
+    mov si, msg_hello
+    call print
+
+    cli                         ; disable interrupts, this way CPU can't get out of "halt" state
+    hlt
 
 ;
 ; Prints a string to the screen
 ; Params:
 ;   - ds:si points to string
 ;
-puts:
+print:
     ; save registers we will modify
     push si
     push ax
@@ -65,51 +78,7 @@ puts:
     pop ax
     pop si    
     ret
-    
 
-main:
-    ; setup data segments
-    mov ax, 0                   ; can't set ds/es directly
-    mov ds, ax
-    mov es, ax
-    
-    ; setup stack
-    mov ss, ax
-    mov sp, 0x7C00              ; stack grows downwards from where we are loaded in memory
-
-    ; read something from floppy disk
-    ; BIOS should set DL to drive number
-    mov [ebr_drive_number], dl
-
-    mov ax, 1                   ; LBA=1, second sector from disk
-    mov cl, 1                   ; 1 sector to read
-    mov bx, 0x7E00              ; data should be after the bootloader
-    call disk_read
-
-    cli                         ; disable interrupts, this way CPU can't get out of "halt" state
-    hlt
-
-
-;
-; Error handlers
-;
-
-floppy_error:
-    mov si, msg_read_failed
-    call puts
-    jmp wait_key_and_reboot
-
-wait_key_and_reboot:
-    mov ah, 0
-    int 16h                     ; wait for keypress
-    jmp 0FFFFh:0                ; jump to beginning of BIOS, should reboot
-
-.halt:
-    cli                         ; disable interrupts, this way CPU can't get out of "halt" state
-    hlt
-
-
-;
 ; Disk routines
 ;
 
@@ -169,13 +138,13 @@ disk_read:
     call lba_to_chs                     ; compute CHS
     pop ax                              ; AL = number of sectors to read
     
-    mov ah, 02h
+    mov ah, 0x02
     mov di, 3                           ; retry count
 
 .retry:
     pusha                               ; save all registers, we don't know what bios modifies
     stc                                 ; set carry flag, some BIOS'es don't set it
-    int 13h                             ; carry flag cleared = success
+    int 0x13                             ; carry flag cleared = success
     jnc .done                           ; jump if carry not set
 
     ; read failed
@@ -200,7 +169,6 @@ disk_read:
     pop ax                             ; restore registers modified
     ret
 
-
 ;
 ; Resets disk controller
 ; Parameters:
@@ -210,13 +178,36 @@ disk_reset:
     pusha
     mov ah, 0
     stc
-    int 13h
+    int 0x13
     jc floppy_error
     popa
     ret
 
+;
+; Error handlers
+;
 
-msg_read_failed:        db 'Read from disk failed!', ENDL, 0
+floppy_error:
+    mov si, msg_read_failed
+    call print
+    jmp wait_key_and_reboot
+
+wait_key_and_reboot:
+    mov ah, 0
+    int 0x16                    ; wait for keypress
+    jmp 0FFFFh:0                ; jump to beginning of BIOS, should reboot
+
+.halt:
+    cli                         ; disable interrupts, this way CPU can't get out of "halt" state
+    hlt
+
+
+;
+; Messages
+;
+
+msg_read_failed:        db 'Read from disk failed!', endl, 0
+msg_hello:              db 'Hello my friend', endl, 0
 
 times 510-($-$$) db 0
-dw 0AA55h
+dw 0xaa55
