@@ -15,7 +15,7 @@ dfh_bytes:                dw 512            ; Bytes per sector
 dfh_sectors_per_cluster:  db 1
 dfh_reserverd_sectors:    dw 1
 dfh_fat_count:            db 2              ; File allocation table redundency count
-dfh_dir_entry_count:      dw 0xe0           ; 244
+dfh_dir_entry_count:      dw 0xe0           ; 224
 dfh_total_sectors:        dw 2880
 dfh_media_descriptor:     db 0xf0
 dfh_sectors_per_fat:      dw 9
@@ -32,13 +32,13 @@ ebr_volume_id:              db 12h, 34h, 56h, 78h   ; serial number
 ebr_volume_label:           db 'IDKOS      '        ; 11 bytes, padded with spaces
 ebr_system_id:              db 'FAT12   '           ; 8 bytes
 
-; Code goes here
+; main execution
 main:
     ; setup data segments
     mov ax, 0                   ; can't set ds/es directly
     mov ds, ax
     mov es, ax
-    
+
     ; setup stack
     mov ss, ax
     mov sp, 0x7c00              ; stack grows downwards from where we are loaded in memory
@@ -47,6 +47,62 @@ main:
 
     mov si, msg_hello
     call print
+
+    ; Here I am calculating where the root directory is
+    mov ax, [dfh_sectors_per_fat]
+    mov dx, [dfh_fat_count]
+    xor dh, dh
+    mul dx ; as = Calculate fat sector count
+    add ax, [dfh_reserverd_sectors] ; Add reserved sectors to ax
+    push ax
+
+    ; Now I will calulate the size of the root directory
+    ; Formula (numberOfEntries * 32) / bytes_per_sector
+    mov ax, [dfh_dir_entry_count]
+    mov dx, 32
+    mul dx
+
+    div word [dfh_bytes]
+    test dx, dx
+    jz .finroot
+    inc ax
+
+.read_root:
+    mov cx, ax
+    pop ax
+    mov dl, [ebr_drive_number]
+    mov bx, buffer
+
+    call disk_read
+    xor bx, bx
+    mov di, buffer
+
+.search_kernel:
+    mov si, kernel_file_name
+    mov cx, 11
+
+    push di
+    repe cmpsb
+    pop di
+    je .found_kernel 
+    add di, 32
+    inc bx
+    cmp bx, [dfh_dir_entry_count]
+    je kernel_not_found
+    jmp .search_kernel
+.found_kernel:
+
+    ; di still has kernel location
+    ; di offset by 26 bytes is the first cluster location
+    mov ax, [di + 26]
+    mov [kernel_sector], ax
+
+    mov ax, [dfh_reserverd_sectors]
+    mov bx, buffer
+    mov cx, [dfh_sectors_per_fat]
+
+    call disk_read
+
 
     cli                         ; disable interrupts, this way CPU can't get out of "halt" state
     hlt
@@ -78,45 +134,10 @@ print:
     pop ax
     pop si    
     ret
-
+    
+;
 ; Disk routines
 ;
-
-;
-; Converts an LBA address to a CHS address
-; Parameters:
-;   - ax: LBA address
-; Returns:
-;   - cx [bits 0-5]: sector number
-;   - cx [bits 6-15]: cylinder
-;   - dh: head
-;
-
-lba_to_chs:
-
-    push ax
-    push dx
-
-    xor dx, dx                          ; dx = 0
-    div word [dfh_sectors_per_track]    ; ax = LBA / SectorsPerTrack
-                                        ; dx = LBA % SectorsPerTrack
-
-    inc dx                              ; dx = (LBA % SectorsPerTrack + 1) = sector
-    mov cx, dx                          ; cx = sector
-
-    xor dx, dx                          ; dx = 0
-    div word [dfh_heads]                ; ax = (LBA / SectorsPerTrack) / Heads = cylinder
-                                        ; dx = (LBA / SectorsPerTrack) % Heads = head
-    mov dh, dl                          ; dh = head
-    mov ch, al                          ; ch = cylinder (lower 8 bits)
-    shl ah, 6
-    or cl, ah                           ; put upper 2 bits of cylinder in CL
-
-    pop ax
-    mov dl, al                          ; restore DL
-    pop ax
-    ret
-
 
 ;
 ; Reads sectors from a disk
@@ -124,7 +145,7 @@ lba_to_chs:
 ;   - ax: LBA address
 ;   - cl: number of sectors to read (up to 128)
 ;   - dl: drive number
-;   - es:bx: memory address where to store read data
+;   - es:bx memory address where to store read data
 ;
 disk_read:
 
@@ -183,6 +204,38 @@ disk_reset:
     popa
     ret
 
+; Converts an LBA address to a CHS address
+; Parameters:
+;   - ax: LBA address
+; Returns:
+;   - cx [bits 0-5]: sector number
+;   - cx [bits 6-15]: cylinder
+;   - dh: head
+;
+lba_to_chs:
+    push ax
+    push dx
+
+    xor dx, dx                          ; dx = 0
+    div word [dfh_sectors_per_track]    ; ax = LBA / SectorsPerTrack
+                                        ; dx = LBA % SectorsPerTrack
+
+    inc dx                              ; dx = (LBA % SectorsPerTrack + 1) = sector
+    mov cx, dx                          ; cx = sector
+
+    xor dx, dx                          ; dx = 0
+    div word [dfh_heads]                ; ax = (LBA / SectorsPerTrack) / Heads = cylinder
+                                        ; dx = (LBA / SectorsPerTrack) % Heads = head
+    mov dh, dl                          ; dh = head
+    mov ch, al                          ; ch = cylinder (lower 8 bits)
+    shl ah, 6
+    or cl, ah                           ; put upper 2 bits of cylinder in CL
+
+    pop ax
+    mov dl, al                          ; restore DL
+    pop ax
+    ret
+
 ;
 ; Error handlers
 ;
@@ -191,23 +244,30 @@ floppy_error:
     mov si, msg_read_failed
     call print
     jmp wait_key_and_reboot
+kernel_not_found:
+    mov si, msg_kernel_not_found
+    call print
+    jmp wait_key_and_reboot
 
 wait_key_and_reboot:
     mov ah, 0
     int 0x16                    ; wait for keypress
-    jmp 0FFFFh:0                ; jump to beginning of BIOS, should reboot
-
-.halt:
+    jmp 0xffff:0                ; jump to beginning of BIOS, should reboot
     cli                         ; disable interrupts, this way CPU can't get out of "halt" state
     hlt
 
-
 ;
-; Messages
+; Messages and data
 ;
 
 msg_read_failed:        db 'Read from disk failed!', endl, 0
+msg_kernel_not_found:   db 'Kernel could not be found!', endl, 0
 msg_hello:              db 'Hello my friend', endl, 0
+
+kernel_file_name:       db 'KERNEL  BIN'
+kernel_sector:          dw 0
 
 times 510-($-$$) db 0
 dw 0xaa55
+
+buffer:
