@@ -1,10 +1,13 @@
 ; Bootloader for IDKOS
 ; Author Felix Dahmen (texotek)
 
-org 0x7c00  ; BIOS loads first sector at 0x7c00
-bits 16     ; Set execution mode to 16 bit
+KERNEL_LOCATION equ 0x1000
+KERNEL_SEGMENT equ 0
 
 %define endl 0x0d, 0x0a
+
+org 0x7c00  ; BIOS loads first sector at 0x7c00
+bits 16     ; Set execution mode to 16 bit
 
 ; FAT12 headers
 jmp short main
@@ -45,9 +48,6 @@ main:
 
     mov [ebr_drive_number], dl
 
-    mov si, msg_hello
-    call print
-
     ; Here I am calculating where the root directory is
     mov ax, [dfh_sectors_per_fat]
     mov dx, [dfh_fat_count]
@@ -64,10 +64,11 @@ main:
 
     div word [dfh_bytes]
     test dx, dx
-    jz .finroot
+    jz .read_root
     inc ax
 
 .read_root:
+    mov cx, 0
     mov cx, ax
     pop ax
     mov dl, [ebr_drive_number]
@@ -103,6 +104,63 @@ main:
 
     call disk_read
 
+    mov bx, KERNEL_SEGMENT
+    mov es, bx
+    mov bx, KERNEL_LOCATION
+.reading_kernel:
+
+    ; Here I am calculating the logical block address of the kernel sector
+    mov ax, [kernel_sector]
+    add ax, 31
+
+    ;mov dl, [dfh_sectors_per_cluster]
+    ;xor dh, dh
+    ;mul dx
+    mov cl, 1
+    mov dl, [ebr_drive_number]
+    call disk_read
+
+    add bx, [dfh_bytes] ; must be fixed later
+
+    ; compute next cluster
+    mov ax, [kernel_sector]
+    mov cx, 3
+    mul cx
+
+    mov cx, 2
+    div cx
+
+    mov si, buffer
+    add si, ax
+    mov ax, [ds:si]
+
+    or dx, dx
+    jz .even
+
+.odd:
+    shr ax, 0x0fff
+    jmp .nextcluster
+.even:
+    and ax, 0x0fff
+.nextcluster:
+    cmp ax, 0x0FF8
+    jae .read_finish
+
+    mov [kernel_sector], ax
+    jmp .reading_kernel
+.read_finish:
+
+    mov dl, [ebr_drive_number]
+    xor dh, dh
+
+    mov ax, KERNEL_SEGMENT
+    mov ds, ax
+    mov ss, ax
+
+
+    jmp KERNEL_SEGMENT:KERNEL_LOCATION
+
+    jmp wait_key_and_reboot
 
     cli                         ; disable interrupts, this way CPU can't get out of "halt" state
     hlt
@@ -134,7 +192,7 @@ print:
     pop ax
     pop si    
     ret
-    
+
 ;
 ; Disk routines
 ;
