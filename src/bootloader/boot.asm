@@ -9,17 +9,17 @@ KERNEL_SEGMENT equ 0
 org 0x7c00  ; BIOS loads first sector at 0x7c00
 bits 16     ; Set execution mode to 16 bit
 
-; FAT12 headers
-jmp short main
-nop
+; FAT12 headers https://wiki.osdev.org/FAT12#FAT_12
+jmp short main  ; Jump to main execution
+nop             ; NOP because of these r
 
 dfh_oem_name:             db "IDKOS0.1"     ; 8 bytes
 dfh_bytes:                dw 512            ; Bytes per sector
-dfh_sectors_per_cluster:  db 1
-dfh_reserverd_sectors:    dw 1
+dfh_sectors_per_cluster:  db 1              ; How much sectors there are for every cluster
+dfh_reserverd_sectors:    dw 1              ; 1 Sector reserved for 
 dfh_fat_count:            db 2              ; File allocation table redundency count
 dfh_dir_entry_count:      dw 0xe0           ; 224
-dfh_total_sectors:        dw 2880
+dfh_total_sectors:        dw 2880       
 dfh_media_descriptor:     db 0xf0
 dfh_sectors_per_fat:      dw 9
 dfh_sectors_per_track:    dw 18
@@ -299,15 +299,15 @@ lba_to_chs:
 ;
 
 floppy_error:
-    mov si, msg_read_failed
-    call print
+    mov si, msg_read_failed             
+    call print                          ; Prints error
     jmp wait_key_and_reboot
 kernel_not_found:
     mov si, msg_kernel_not_found
-    call print
+    call print                          ; Prints error
     jmp wait_key_and_reboot
 
-wait_key_and_reboot:
+wait_key_and_reboot:            ; Reboots the machine when pressing a key
     mov ah, 0
     int 0x16                    ; wait for keypress
     jmp 0xffff:0                ; jump to beginning of BIOS, should reboot
