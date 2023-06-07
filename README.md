@@ -52,3 +52,10 @@ make && qemu-system-i386 -fda build/main_floppy.img
 cd idkos
 make && bochs -f boch_config
 ```
+
+## 4. Resources
+My main resources:
+- [The OSdev wiki](https://wiki.osdev.org)
+- [Daedalus Community](https://www.youtube.com/watch?v=MwPjvJ9ulSc&t=18s)
+- [NASM documentation](https://www.nasm.us/doc/)
+- [Tutorialsonpoint](https://www.tutorialspoint.com/assembly_programming/index.htm)
