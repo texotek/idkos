@@ -1,6 +1,7 @@
 .DS_Store
 
 .vscode
+.nvim
 build
 
 bx_enh_dbg.ini
