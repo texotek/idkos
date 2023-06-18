@@ -2,6 +2,8 @@
 
 .vscode
 .nvim
+.cache/
+compile_commands.json
 build
 
 bx_enh_dbg.ini
