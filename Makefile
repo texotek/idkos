@@ -30,3 +30,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 
 clean:
 	rm -rf $(BUILD_DIR)/*
+bear:
+	make clean && CC=/opt/homebrew/Cellar/i686-elf-gcc/13.1.0/bin/i686-elf-gcc bear -- make CC=cc
+run: all
+	qemu-system-i386 -kernel build/idkos.bin
+	

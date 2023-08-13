@@ -1,5 +1,9 @@
 #include <io.h>
 #include <terminal.h>
+#include <stdint.h>
+#include <stdarg.h>
+
+static void write_int(int);
 
 static const int vga_height = 20;
 static const int vga_width = 80; 
@@ -8,16 +12,41 @@ int terminal_row = 0;
 int terminal_column = 0;
 
 void move_cursor(unsigned short position) {
-    outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND);
-    outb(FB_DATA_PORT,    ((position >> 8) & 0x00FF));
-    outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND);
-    outb(FB_DATA_PORT,    position & 0x00FF);
+    outb(0x3d4, 14);
+    outb(0x3d5, ((position >> 8) & 0x00FF));
+    outb(0x3d4, 15);
+    outb(0x3d5, position & 0x00FF);
 }
 
-void write_string(const char* string) {
-    while(*string != 0) putc(*string++);
+void printf(const char* format, ...) {
+
+    va_list args;
+    va_start(args, format);
+
+    while (*format != 0) {
+        if(*format != '%') {
+            putc(*format++);
+        }
+        else {
+            switch (*++format) {
+                char *sval;
+                case 'i':
+                case 'd':
+                    write_int(va_arg(args, int));
+                    break;
+                case 's':
+                    for (sval = va_arg(args, char *); *sval; sval++) {
+                        putc(*sval);
+                    }
+                    break;
+            }
+            format++;
+        }
+    }
+    va_end(args);
 }
-void write_int(int num) {
+
+static void write_int(int num) {
     char buffer[100];
     char isNegative = 0;
     int i = 0;
@@ -35,12 +64,14 @@ void write_int(int num) {
     while (i > 0) putc(buffer[--i]);
 
 }
+
 void putc(unsigned char c) {
     volatile unsigned short *video_memory = (volatile unsigned short *)0xb8000;
     if (c == '\n' || terminal_column > 80) {
         terminal_column = 0;
         terminal_row++;
         move_cursor(vga_width * terminal_row + terminal_column);
+        return;
     }
     *(video_memory + vga_width * terminal_row + terminal_column++) = 0x0f << 8 | c;
     move_cursor(vga_width * terminal_row + terminal_column);

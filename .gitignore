@@ -3,6 +3,8 @@
 .vscode
 .nvim
 .cache/
+.ccls-cache/
+
 compile_commands.json
 build
 
