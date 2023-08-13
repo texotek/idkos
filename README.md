@@ -3,13 +3,6 @@ Author: Felix Dahmen
 
 ## 1. About this project
 With this project I am trying to create my own os.
-
-It is a work in progress
-## 2. Requirements
-
-WIP as well
-
-## 3. Running the thing
 WIP 
 
 ## 4. Resources
