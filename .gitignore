@@ -3,6 +3,7 @@
 .vscode
 .nvim
 .cache/
+.idea
 .ccls-cache/
 
 compile_commands.json
